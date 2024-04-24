@@ -1,11 +1,11 @@
-操作步骤：
 
-1、导入相机参数param.txt到input文件夹中。
-2、采集8张不同位姿的bmp以及tiff到input文件夹中。
-3、导入8张不同位姿下的机械臂pos（顺序为Rx、Ry、Rz、X、Y、Z）。
-4、默认使用圆心距20mm标定板，否则自行修改代码168行。
-5、运行calib.py。
-6、结果检查：将output文件夹生成的.xyz文件导入点云查看软件，检验圆心重合度。或利用result.txt结果走点校验。
+Operation steps:
 
-
+1. Import camera parameters from param.txt into the input folder.
+2. Capture 8 BMP and TIFF images with different poses into the input folder.
+Import the positions of the robot arm under 8 different poses (order: Rx, Ry, Rz, X, Y, Z).
+3. By default, use a calibration board with a 20mm center distance; otherwise, modify line 168 of the code accordingly.
+4. Run calib.py. 
+5. Check the "output/result.txt" (order: rotation_matrix[0:9], traslation_vector[0:3])
+5. Result verification: open .xyz files generated in the "output/" folder into CloudCompare to check the overlap of the centers. 
 
