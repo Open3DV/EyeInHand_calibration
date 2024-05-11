@@ -4,16 +4,28 @@ import os
 from tqdm import trange
 from scipy.spatial.transform import Rotation as R
 
-def calib():
-    data_path = "input/"
-    param_txt_path = "input/param.txt"
-    output="output/"
+def calib_EyeInHand():
+    data_path = "input_EyeInHand/"
+    param_txt_path = "input_EyeInHand/param.txt"
+    output="output_EyeInHand/"
 
     # 用于从点云生成标定数据，并保存cam2tcp
     cam2tcp_rmtx,cam2tcp_tvec=calibrateHandEye_using_files(data_path, param_txt_path)
 
     camera_mtx, camera_dist = Loading_Params_From_Txt(param_txt_path)
     New_Generate_Pointclouds(data_path,output, cam2tcp_rmtx, cam2tcp_tvec, camera_mtx, camera_dist)
+
+def calib_EyeToHand():
+    data_path = "input_EyeToHand/"
+    param_txt_path = "input_EyeToHand/param.txt"
+    output="output_EyeToHand/"
+
+    # 用于从点云生成标定数据，并保存cam2tcp
+    cam2tcp_rmtx,cam2tcp_tvec=calibrateHandEye_using_files_EyeToHand(data_path, param_txt_path)
+
+    camera_mtx, camera_dist = Loading_Params_From_Txt(param_txt_path)
+    New_Generate_Pointclouds_EyeToHand(data_path,output, cam2tcp_rmtx, cam2tcp_tvec, camera_mtx, camera_dist)
+
 
 
 def calibrateHandEye_using_files(data_path,param_txt_path):
@@ -22,9 +34,11 @@ def calibrateHandEye_using_files(data_path,param_txt_path):
     print("Camera Dist:", camera_dist)
 
     tcp2base_rmtxs, tcp2base_rvecs, tcp2base_tvecs = Get_TCP2Base_Transform_From_Json(data_path)
+
+
     board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam_Transform(data_path, camera_mtx, camera_dist,use_2D=True)
     # Not robust for computing pose for Camera 2 Board
-    Transform_BoardCenters_FromCameraToBoard(data_path, camera_mtx, camera_dist, use_2D=True)
+    #Transform_BoardCenters_FromCameraToBoard(data_path, camera_mtx, camera_dist, use_2D=True)
 
     cam2tcp_rmtx, cam2tcp_tvec = cv2.calibrateHandEye(tcp2base_rmtxs, tcp2base_tvecs, board2cam_rmtxs, board2cam_tvecs,
                                                       method=cv2.CALIB_HAND_EYE_PARK)
@@ -43,12 +57,54 @@ def calibrateHandEye_using_files(data_path,param_txt_path):
     for g in range(3):
             data.append(round(cam2tcp_tvec[g, 0],8))
 
-    file_path = os.path.join(os.getcwd(), 'output', 'result.txt')
+    file_path = os.path.join(os.getcwd(), 'output_EyeInHand', 'result.txt')
     with open(file_path, 'w') as file:
         for item in data:
             file.write(str(item) + '\n')
 
     return cam2tcp_rmtx, cam2tcp_tvec
+
+
+def calibrateHandEye_using_files_EyeToHand(data_path,param_txt_path):
+    camera_mtx, camera_dist = Loading_Params_From_Txt(param_txt_path)
+    print("Camera Mtx:", camera_mtx)
+    print("Camera Dist:", camera_dist)
+
+    tcp2base_rmtxs, tcp2base_tvecs = Get_TCP2Base_Transform_From_Json_EyeToHand(data_path)
+
+    #print(tcp2base_rmtxs)
+    #print(tcp2base_tvecs)
+    board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam_Transform_EyeToHand(data_path, camera_mtx, camera_dist,use_2D=True)
+    # Not robust for computing pose for Camera 2 Board
+    #Transform_BoardCenters_FromCameraToBoard(data_path, camera_mtx, camera_dist, use_2D=True)
+
+    cam2tcp_rmtx, cam2tcp_tvec = cv2.calibrateHandEye(tcp2base_rmtxs, tcp2base_tvecs, board2cam_rmtxs, board2cam_tvecs,
+                                                      method=cv2.CALIB_HAND_EYE_TSAI)
+
+    cam2tcp_rmtx = np.matrix(cam2tcp_rmtx)
+    cam2tcp_tvec = np.matrix(cam2tcp_tvec)
+
+    cam2tcp_rvec = get_rvec(cam2tcp_rmtx)
+    print('Cam2Base的数据如下(R、T)：')
+    print("Cam2Base R:", cam2tcp_rmtx)
+    print("Cam2Base T:", cam2tcp_tvec)
+
+    data=[]
+    for i in range(3):
+        for j in range(3):
+            data.append(round(cam2tcp_rmtx[i, j],8))
+    for g in range(3):
+            data.append(round(cam2tcp_tvec[g, 0],8))
+
+    file_path = os.path.join(os.getcwd(), 'output_EyeToHand', 'result.txt')
+    with open(file_path, 'w') as file:
+        for item in data:
+            file.write(str(item) + '\n')
+
+    return cam2tcp_rmtx, cam2tcp_tvec
+
+
+
 def get_rmtx(rvec):
     check_rvec(rvec)
     rmtx, _ = cv2.Rodrigues(rvec)
@@ -157,7 +213,21 @@ def svdICP(pc1, pc2):
 
 def Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist):
     # print("Using 2D-3D to compute the Transform Matrix between Board and Camera")
-    objectpoints = CircleObjectPointsGenerate(11, 7, 20, 20)
+    objectpoints = CircleObjectPointsGenerate(11, 7, 20,20)
+    color_img = cv2.imread(color_img_path, 0)
+    color_img = 255 - color_img
+    ret, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
+    _, rvec, tvec = cv2.solvePnP(objectpoints, centers, camera_mtx, camera_dist)
+    rmtx = get_rmtx(np.matrix(rvec))
+    tvec = np.matrix(tvec)
+    check_rmtx(rmtx)
+    check_tvec(tvec)
+
+    return rmtx, tvec
+
+def Get_Board2Cam_Transform_2D_EyeToHand(color_img_path, camera_mtx, camera_dist):
+    # print("Using 2D-3D to compute the Transform Matrix between Board and Camera")
+    objectpoints = CircleObjectPointsGenerate(11, 7, 40,40)
     color_img = cv2.imread(color_img_path, 0)
     color_img = 255 - color_img
     ret, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
@@ -172,6 +242,33 @@ def Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist):
 def Get_Board2Cam_Transform_3D(color_img_path, depth_img_path, camera_mtx, camera_dist):
     # print("Using 3D-3D to compute the Transform Matrix between Board and Camera")
     objectpoints = CircleObjectPointsGenerate(11, 7, 20, 20)
+    color_img = cv2.imread(color_img_path, 0)
+    color_img = 255 - color_img
+    _, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
+    depth = Loading_Depth_From_Tiff(depth_img_path)
+    # depth = Depth_Middle_Fliter(depth)
+    # Filter is needed for depth?
+    centers_undistort = cv2.undistortPoints(centers, camera_mtx, camera_dist)
+    centers_3d = []
+    for i in range(len(centers)):
+        points = centers[i, 0, :]
+        z = interp2d(depth, points)
+        x = centers_undistort[i, 0, 0] * z
+        y = centers_undistort[i, 0, 1] * z
+        pts = np.array([x, y, z])
+        centers_3d.append(pts)
+    centers_3d = np.array(centers_3d)
+    rmtx, tvec = svdICP(centers_3d, objectpoints)
+    rmtx = np.matrix(rmtx)
+    tvec = np.matrix(tvec.reshape(3, 1))
+    check_tvec(tvec)
+    check_rmtx(rmtx)
+
+    return rmtx, tvec
+
+def Get_Board2Cam_Transform_3D_EyeToHand(color_img_path, depth_img_path, camera_mtx, camera_dist):
+    # print("Using 3D-3D to compute the Transform Matrix between Board and Camera")
+    objectpoints = CircleObjectPointsGenerate(11, 7, 40, 40)
     color_img = cv2.imread(color_img_path, 0)
     color_img = 255 - color_img
     _, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
@@ -216,7 +313,7 @@ def Get_TCP2Base_Transform_From_Json(data_path):
     tex = []
 
     for i in range(8):
-        tex.append(f'input/pos{i}.txt')
+        tex.append(f'input_EyeInHand/pos{i}.txt')
 
     # for root, dirs, files in os.walk(data_path):
     #     for file in files:
@@ -245,6 +342,45 @@ def Get_TCP2Base_Transform_From_Json(data_path):
 
     return tcp2base_rmtxs, tcp2base_rvecs, tcp2base_tvecs
 
+
+def Get_TCP2Base_Transform_From_Json_EyeToHand(data_path):
+    base2tcp_rmtxs = []
+    tcp2base_rvecs = []
+    base2tcp_tvecs = []
+    tex = []
+
+    for i in range(5):
+        tex.append(f'input_EyeToHand/pos{i}.txt')
+
+    # for root, dirs, files in os.walk(data_path):
+    #     for file in files:
+    #         if file.startswith("pos") and file.endswith(".txt"):
+    #             pos_num = int(file[3:4])
+    #             if pos_num >= 0 and pos_num <= 7:
+    #                 tex.append(os.path.join(root, file))
+    # tex = sorted(tex, key=lambda x: int(x.split("/")[-1][3:4]))
+    print('txt')
+    print(tex)
+    for i in range(5):
+        data = tex[i]
+        # print(data)
+
+        f = open(data, "r")
+        lines = f.readlines()  # 读取全部内容
+        list1 = []
+        for line in lines:
+            list1.append(line.strip().split('\t'))
+        rvec = get_rvec_Yaskawa(list1[0][0], list1[1][0], list1[2][0])
+        tvec = np.matrix([list1[3][0], list1[4][0], list1[5][0]], dtype=np.float32).T
+        rmtx = get_rmtx(rvec)
+
+        inverse = np.linalg.inv(rmtx)
+        tvc = (-inverse * tvec)
+        base2tcp_rmtxs.append(inverse)
+        base2tcp_tvecs.append(tvc)
+
+    return base2tcp_rmtxs, base2tcp_tvecs
+
 def Get_Board2Cam_Transform(data_path, camera_mtx, camera_dist, use_2D=False, use_3D=False):
     board2cam_rmtxs = []
     board2cam_tvecs = []
@@ -252,8 +388,13 @@ def Get_Board2Cam_Transform(data_path, camera_mtx, camera_dist, use_2D=False, us
 
     file_list = []
 
+    file_list1=[]
+
     for i in range(8):
-        file_list.append(f'input/pos{i}.bmp')
+        file_list.append(f'input_EyeInHand/pos{i}.bmp')
+
+    for i in range(8):
+        file_list1.append(f'input_EyeInHand/pos{i}.tiff')
 
     # for file in os.listdir(data_path):
     # file_path = os.path.join(data_path, file)
@@ -265,11 +406,46 @@ def Get_Board2Cam_Transform(data_path, camera_mtx, camera_dist, use_2D=False, us
 
     for i in range(8):
         color_img_path = file_list[i]
-        depth_img_path = file_list[i]
+        depth_img_path = file_list1[i]
         if use_2D:
             rmtx, tvec = Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist)
         elif use_3D:
             rmtx, tvec = Get_Board2Cam_Transform_3D(color_img_path, depth_img_path, camera_mtx, camera_dist)
+        else:
+            raise NotImplementedError("Not implented yet")
+
+        board2cam_rmtxs.append(rmtx)
+        board2cam_tvecs.append(tvec)
+
+    return board2cam_rmtxs, board2cam_tvecs
+def Get_Board2Cam_Transform_EyeToHand(data_path, camera_mtx, camera_dist, use_2D=False, use_3D=False):
+    board2cam_rmtxs = []
+    board2cam_tvecs = []
+
+
+    file_list = []
+
+    file_list1=[]
+
+    for i in range(5):
+        file_list.append(f'input_EyeToHand/pos{i}.bmp')
+    for i in range(5):
+        file_list1.append(f'input_EyeToHand/pos{i}.tiff')
+    # for file in os.listdir(data_path):
+    # file_path = os.path.join(data_path, file)
+    # if os.path.isfile(file_path) and file.endswith('.bmp'):
+    # file_list.append(file_path)
+    # file_list = sorted(file_list, key=lambda x: int(x.split("/")[-1][3:4]))
+    print("bmp")
+    print(file_list)
+
+    for i in range(5):
+        color_img_path = file_list[i]
+        depth_img_path = file_list1[i]
+        if use_2D:
+            rmtx, tvec = Get_Board2Cam_Transform_2D_EyeToHand(color_img_path, camera_mtx, camera_dist)
+        elif use_3D:
+            rmtx, tvec = Get_Board2Cam_Transform_3D_EyeToHand(color_img_path, depth_img_path, camera_mtx, camera_dist)
         else:
             raise NotImplementedError("Not implented yet")
 
@@ -285,9 +461,11 @@ def Transform_BoardCenters_FromCameraToBoard(data_path, camera_mtx, camera_dist,
 
 
     file_list = []
-    file_list = []
+    file_list1 = []
     for i in range(8):
-        file_list.append(f'input/pos{i}.bmp')
+        file_list.append(f'input_EyeInHand/pos{i}.bmp')
+    for i in range(8):
+        file_list1.append(f'input_EyeInHand/pos{i}.tiff')
     # for file in os.listdir(data_path):
     #     file_path = os.path.join(data_path, file)
     #     if os.path.isfile(file_path) and file.endswith('.bmp'):
@@ -297,7 +475,7 @@ def Transform_BoardCenters_FromCameraToBoard(data_path, camera_mtx, camera_dist,
     print(file_list)
     for i in range(8):
         color_img_path = file_list[i]
-        depth_img_path = file_list[i]
+        depth_img_path = file_list1[i]
         if use_2D:
             rmtx, tvec = Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist)
         elif use_3D:
@@ -306,23 +484,23 @@ def Transform_BoardCenters_FromCameraToBoard(data_path, camera_mtx, camera_dist,
             raise NotImplementedError("Not implented yet")
         # print("Cam2Board Rmtx:", rmtx[0,0])
         # print("Cam2Board Tvec:", tvec[0,0])
-        centers_3d = Get_Board_Centers_3D(color_img_path, depth_img_path, camera_mtx, camera_dist)
-        cam2board_rmtx, cam2board_tvec = InvTransformRT(rmtx, tvec)
-        centers_3d = np.matrix(centers_3d).T
-        centers_3d = cam2board_rmtx * centers_3d + cam2board_tvec
-        centers_3d = np.array(centers_3d).T
-        # print("Centers_3d:", centers_3d[0])
-        # print("Objectpoints:", objectpoints[0])
-        # print(np.linalg.norm(centers_3d-objectpoints, axis=1, keepdims=True))
-        error_list = np.linalg.norm(centers_3d - objectpoints, axis=1, keepdims=True)
-        #print("Current error when transform centers from Camera to Board:", np.mean(error_list))
-        total_error_list.append(error_list)
-        # np.savetxt(os.path.join(data_path, files[key]+'_center_board_3D.xyz'), centers_3d)
-
-    total_error_list = np.array(total_error_list)
-    # print(total_error_list.shape)
-    avg_error = np.mean(total_error_list)
-    #print("Average error when transform centers from Camera to Board:", avg_error)
+    #     centers_3d = Get_Board_Centers_3D(color_img_path, depth_img_path, camera_mtx, camera_dist)
+    #     cam2board_rmtx, cam2board_tvec = InvTransformRT(rmtx, tvec)
+    #     centers_3d = np.matrix(centers_3d).T
+    #     centers_3d = cam2board_rmtx * centers_3d + cam2board_tvec
+    #     centers_3d = np.array(centers_3d).T
+    #     # print("Centers_3d:", centers_3d[0])
+    #     # print("Objectpoints:", objectpoints[0])
+    #     # print(np.linalg.norm(centers_3d-objectpoints, axis=1, keepdims=True))
+    #     error_list = np.linalg.norm(centers_3d - objectpoints, axis=1, keepdims=True)
+    #     #print("Current error when transform centers from Camera to Board:", np.mean(error_list))
+    #     total_error_list.append(error_list)
+    #     # np.savetxt(os.path.join(data_path, files[key]+'_center_board_3D.xyz'), centers_3d)
+    #
+    # total_error_list = np.array(total_error_list)
+    # # print(total_error_list.shape)
+    # avg_error = np.mean(total_error_list)
+    # #print("Average error when transform centers from Camera to Board:", avg_error)
 
     return 0
 
@@ -368,9 +546,9 @@ def New_Generate_Pointclouds(data_path,output, cam2tcp_rmtx, cam2tcp_tvec, camer
     file_list = []
     file_list1 = []
     for i in range(8):
-        file_list.append(f'input/pos{i}.bmp')
+        file_list.append(f'input_EyeInHand/pos{i}.bmp')
     for i in range(8):
-        file_list1.append(f'input/pos{i}.tiff')
+        file_list1.append(f'input_EyeInHand/pos{i}.tiff')
     # for root, dirs, files in os.walk(data_path):
     #
     #     for file in files:
@@ -386,7 +564,7 @@ def New_Generate_Pointclouds(data_path,output, cam2tcp_rmtx, cam2tcp_tvec, camer
     print(file_list1)
     tex = []
     for i in range(8):
-        tex.append(f'input/pos{i}.txt')
+        tex.append(f'input_EyeInHand/pos{i}.txt')
     for i in range(8):
         color_img_path = file_list[i]
         depth_img_path = file_list1[i]
@@ -431,6 +609,65 @@ def New_Generate_Pointclouds(data_path,output, cam2tcp_rmtx, cam2tcp_tvec, camer
 
     return 0
 
+def New_Generate_Pointclouds_EyeToHand(data_path,output, cam2base_rmtx, cam2base_tvec, camera_mtx,
+                             camera_dist):
+    file_list = []
+    file_list1 = []
+    for i in range(5):
+        file_list.append(f'input_EyeToHand/pos{i}.bmp')
+    for i in range(5):
+        file_list1.append(f'input_EyeToHand/pos{i}.tiff')
+    sh = file_list
+    sh1 = file_list1
+
+    print(sh)
+    print(sh1)
+    tex = []
+    for i in range(5):
+        tex.append(f'input_EyeToHand/pos{i}.txt')
+
+
+    print(tex)
+    for i in range(5):
+        color_img_path = sh[i]
+        depth_img_path = sh1[i]
+        color = cv2.imread(color_img_path)
+        depth = Loading_Depth_From_Tiff(depth_img_path)
+        pointcloud = Generate_Pointcloud_From_Depth_undistort1(depth, color, camera_mtx, camera_dist)
+
+        # 通过计算得到需要的参数
+        pointcloud_base = np.zeros_like(pointcloud)
+        pts = pointcloud[:, :3]
+        color = pointcloud[:, 3:]
+        data = tex[i]
+        f = open(data, "r")
+        lines = f.readlines()  # 读取全部内容
+        list1 = []
+        for line in lines:
+            list1.append(line.strip().split('\t'))
+        rvec = get_rvec_Yaskawa(list1[0][0], list1[1][0], list1[2][0])
+        tvec = np.matrix([list1[3][0], list1[4][0], list1[5][0]], dtype=np.float32).T
+        rmtx = get_rmtx(rvec)
+
+        inverse = np.linalg.inv(rmtx)
+        tvc = (-inverse * tvec)
+
+        cam_tcp_rmtx, cam_tcp_tvec = Get_Camera_Position(cam2base_rmtx, cam2base_tvec, inverse,
+                                                         tvc)
+
+        # 计算得到需要的点云
+        pts = np.matrix(pts).T
+        pts = cam_tcp_rmtx * pts + cam_tcp_tvec
+
+        pts = np.array(pts).T
+        pointcloud_base[:, :3] = pts
+        pointcloud_base[:, 3:] = color
+        list = ['pos0', 'pos1', 'pos2', 'pos3', 'pos4', 'pos5', 'pos6', 'pos7', ]
+        np.savetxt(os.path.join(output, list[i] + '_base_new.xyz'), pointcloud_base)
+    return 0
+
+
+
 def Generate_Pointcloud_From_Depth_undistort(depth, color, camera_mtx, camera_dist):
     pointcloud = []
 
@@ -449,6 +686,24 @@ def Generate_Pointcloud_From_Depth_undistort(depth, color, camera_mtx, camera_di
     pointcloud = np.array(pointcloud)
     return pointcloud
 
+def Generate_Pointcloud_From_Depth_undistort1(depth, color, camera_mtx, camera_dist):
+    pointcloud = []
+
+    for iy in trange(768):
+        for ix in range(1022):
+            # 先对图片去畸变
+            ixiy = cv2.undistortPoints(np.float32(np.array([ix, iy])), camera_mtx, camera_dist)
+            z = depth[iy, ix]
+            r, g, b = color[iy, ix]
+            if z > 0:
+                x = ixiy[0, 0, 0] * z
+                y = ixiy[0, 0, 1] * z
+                pts = np.array([x*1000, y*1000, z*1000, r, g, b])
+                pointcloud.append(pts)
+
+    pointcloud = np.array(pointcloud)
+    return pointcloud
+
 def Loading_Depth_From_Tiff(depth_file):
     depth = cv2.imread(depth_file, -1)
     depth = np.float32(np.array(depth))
@@ -461,5 +716,9 @@ def Get_Camera_Position(cam2tcp_rmtx, cam2tcp_tvec, tcp2base_rmtx, tcp2base_tvec
 
 
 if __name__ == '__main__':
-    calib()
+    #EyeInHand
+    calib_EyeInHand()
+
+    #EyeToHand
+    calib_EyeToHand()
 
