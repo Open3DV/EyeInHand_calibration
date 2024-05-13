@@ -59,6 +59,7 @@ def calib_EyeToHand():
     # 用于从点云生成标定数据，并保存cam2tcp
     cam2base_rmtx,cam2base_tvec=calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_distance,output_path,num)
     # 产生同坐标系下点云
+    #注意，本组数据tiff单位为m,所以Generate_Pointcloud_From_Depth_undistort_EyeToHand函数内，x,y,z各*1000，若以mm为单位时自行修改
     New_Generate_Pointclouds_EyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt, cam2base_rmtx, cam2base_tvec, width, height, output_path,num)
 
 
