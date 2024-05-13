@@ -22,7 +22,7 @@ def calib_EyeInHand():
 
     camera_mtx, camera_dist = Loading_Params_From_Txt(param_txt_path)
 
-    for i in range(8):
+    for i in range(num):
         pos_txt.append(f'input_EyeInHand/pos{i}.txt')
         bright.append(f'input_EyeInHand/pos{i}.bmp')
         depth.append(f'input_EyeInHand/pos{i}.tiff')
