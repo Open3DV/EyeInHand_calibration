@@ -49,8 +49,10 @@ def calib_EyeToHand():
     output_path = "output_EyeToHand/"
 
     camera_mtx, camera_dist = Loading_Params_From_Txt(param_txt_path)
+    print(camera_mtx)
+    print(camera_dist)
 
-    for i in range(8):
+    for i in range(num):
         pos_txt.append(f'input_EyeToHand/pos{i}.txt')
         bright.append(f'input_EyeToHand/pos{i}.bmp')
         depth.append(f'input_EyeToHand/pos{i}.tiff')
