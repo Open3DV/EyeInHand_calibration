@@ -2,7 +2,9 @@ import cv2
 import numpy as np
 import os
 from tqdm import trange
+import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
+from draw_tools import draw_axis, set_axes_equal
 
 def calib_EyeInHand():
     pos_txt = []
@@ -73,7 +75,7 @@ def calibrateEyeInHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_di
     board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
 
     # Not robust for computing pose for Camera 2 Board
-    Transform_BoardCenters_FromCameraToBoard(bright, depth, camera_mtx, camera_dist,center_distance,num, use_2D=True)
+    #Transform_BoardCenters_FromCameraToBoard(bright, depth, camera_mtx, camera_dist,center_distance,num, use_2D=True)
 
     cam2tcp_rmtx, cam2tcp_tvec = cv2.calibrateHandEye(tcp2base_rmtxs, tcp2base_tvecs, board2cam_rmtxs, board2cam_tvecs,
                                                       method=cv2.CALIB_HAND_EYE_PARK)
@@ -98,15 +100,41 @@ def calibrateEyeInHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_di
 
     return cam2tcp_rmtx, cam2tcp_tvec
 
+def show_RT(rmtxs, tvecs):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection = '3d')
+
+    draw_axis(ax, rvec=np.matrix([[.0,.0,.0]]).T, tvec=np.matrix([[.0,.0,.0]]).T)
+
+    for i in range(len(rmtxs)):
+        rmtx = rmtxs[i]
+        check_rmtx(rmtx)
+        rvec = get_rvec(rmtx)
+        tvec = tvecs[i]
+        check_tvec(tvec)
+
+        draw_axis(ax, rvec=rvec, tvec=tvec, index=i)
+
+    set_axes_equal(ax)
+    plt.show()
+    
 
 def calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_distance,output_path,num):
 
     tcp2base_rmtxs, tcp2base_tvecs = Get_TCP2Base_EyeToHand(pos_txt,num)
+    #tcp2base_rmtxs, tcp2base_rvecs, tcp2base_tvecs = Get_TCP2Base(pos_txt,num)
 
     board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam_Transform_EyeToHand(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
 
+    print('show tcp2base')
+    show_RT(tcp2base_rmtxs, tcp2base_tvecs)
+
+    print('show board2cam')
+    show_RT(board2cam_rmtxs, board2cam_tvecs)
+
+
     # Not robust for computing pose for Camera 2 Board
-    Transform_BoardCenters_FromCameraToBoard(bright, depth, camera_mtx, camera_dist,center_distance,num, use_2D=True)
+    #Transform_BoardCenters_FromCameraToBoard(bright, depth, camera_mtx, camera_dist,center_distance,num, use_2D=True)
 
     cam2base_rmtx, cam2base_tvec = cv2.calibrateHandEye(tcp2base_rmtxs, tcp2base_tvecs, board2cam_rmtxs, board2cam_tvecs,
                                                       method=cv2.CALIB_HAND_EYE_TSAI)
@@ -365,8 +393,8 @@ def Get_TCP2Base(pos_txt,num):
 
 def Get_TCP2Base_EyeToHand(pos_txt,num):
 
-    base2tcp_rmtxs = []
-    base2tcp_tvecs = []
+    base2tcp_rmtx_list = []
+    base2tcp_tvec_list = []
 
     print('txt')
     print(pos_txt)
@@ -383,10 +411,10 @@ def Get_TCP2Base_EyeToHand(pos_txt,num):
 
         inverse = np.linalg.inv(rmtx)
         tvc = (-inverse * tvec)
-        base2tcp_rmtxs.append(inverse)
-        base2tcp_tvecs.append(tvc)
+        base2tcp_rmtx_list.append(inverse)
+        base2tcp_tvec_list.append(tvc)
 
-    return base2tcp_rmtxs, base2tcp_tvecs
+    return base2tcp_rmtx_list, base2tcp_tvec_list
 
 def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num, use_2D=False, use_3D=False):
     board2cam_rmtxs = []
@@ -410,6 +438,7 @@ def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num, use
         board2cam_tvecs.append(tvec)
 
     return board2cam_rmtxs, board2cam_tvecs
+
 def Get_Board2Cam_Transform_EyeToHand(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=False, use_3D=False):
     board2cam_rmtxs = []
     board2cam_tvecs = []
