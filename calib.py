@@ -30,10 +30,22 @@ def calib_EyeInHand():
         bright.append(f'input_EyeInHand/pos{i}.bmp')
         depth.append(f'input_EyeInHand/pos{i}.tiff')
 
+    # 获取夹爪和机械臂底座的关系
     tcp2base_rmtx_list, tcp2base_rvec_list, tcp2base_tvec_list = Get_TCP2Base(pos_txt,num)
 
-    # 眼在手上标定并保存cam2tcp
-    cam2tcp_rmtx,cam2tcp_tvec=calibrateEyeInHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_distance,output_path,num)
+    # 获取相机和标定板的关系
+    board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
+
+    # 计算出相机和夹爪的关系
+    cam2tcp_rmtx, cam2tcp_tvec = cv2.calibrateHandEye(tcp2base_rmtx_list, tcp2base_tvec_list, board2cam_rmtxs, board2cam_tvecs,
+                                                      method=cv2.CALIB_HAND_EYE_TSAI)
+    cam2tcp_rmtx = np.matrix(cam2tcp_rmtx)
+    cam2tcp_tvec = np.matrix(cam2tcp_tvec)
+
+    print('Cam2Tcp的数据如下(R、T):')
+    print("Cam2Tcp R:", cam2tcp_rmtx)
+    print("Cam2Tcp T:", cam2tcp_tvec)
+
     cam2tcp_rvec = get_rvec(cam2tcp_rmtx)
     
     #通过cam2tcp和tcp2base，计算cam2base
@@ -103,15 +115,21 @@ def calib_EyeToHand():
 def calibrateEyeInHand(camera_mtx, camera_dist, bright, depth, pos_txt, center_distance,output,num):
 
     tcp2base_rmtxs, tcp2base_rvecs, tcp2base_tvecs = Get_TCP2Base(pos_txt,num)
+    # print(tcp2base_rmtxs)
+    # print(tcp2base_tvecs)
+    # assert 0
 
     board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
+    # print(board2cam_rmtxs)
+    # print(board2cam_tvecs)
+    # assert 0
 
     cam2tcp_rmtx, cam2tcp_tvec = cv2.calibrateHandEye(tcp2base_rmtxs, tcp2base_tvecs, board2cam_rmtxs, board2cam_tvecs,
                                                       method=cv2.CALIB_HAND_EYE_TSAI)
     cam2tcp_rmtx = np.matrix(cam2tcp_rmtx)
     cam2tcp_tvec = np.matrix(cam2tcp_tvec)
 
-    print('Cam2Tcp的数据如下(R、T)：')
+    print('Cam2Tcp的数据如下(R、T):')
     print("Cam2Tcp R:", cam2tcp_rmtx)
     print("Cam2Tcp T:", cam2tcp_tvec)
 
@@ -129,34 +147,6 @@ def calibrateEyeInHand(camera_mtx, camera_dist, bright, depth, pos_txt, center_d
 
     return cam2tcp_rmtx, cam2tcp_tvec
 
-def show_RT(rmtxs, tvecs):
-    fig = plt.figure()
-    ax = fig.add_subplot(projection = '3d')
-
-    draw_axis(ax, rvec=np.matrix([[.0,.0,.0]]).T, tvec=np.matrix([[.0,.0,.0]]).T)
-
-    for i in range(len(rmtxs)):
-        rmtx = rmtxs[i]
-        check_rmtx(rmtx)
-        rvec = get_rvec(rmtx)
-        tvec = tvecs[i]
-        check_tvec(tvec)
-
-        draw_axis(ax, rvec=rvec, tvec=tvec, index=i)
-
-    set_axes_equal(ax)
-    plt.show()
-    
-def invert_RT_list(rmtx_list, tvec_list):
-    rmtx_inv_list = []
-    tvec_inv_list = []
-    for i in range(len(rmtx_list)):
-        rmtx = rmtx_list[i]
-        tvec = tvec_list[i]
-        rmtx_inv, tvec_inv = InvTransformRT(rmtx, tvec)
-        rmtx_inv_list.append(rmtx_inv)
-        tvec_inv_list.append(tvec_inv)
-    return rmtx_inv_list, tvec_inv_list
 
 def calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_distance,output_path,num):
 
@@ -165,7 +155,7 @@ def calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_di
 
     base2tcp_rmtxs, base2tcp_tvecs = invert_RT_list(tcp2base_rmtxs, tcp2base_tvecs)
 
-    board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam_Transform_EyeToHand(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
+    board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
 
     print('show tcp2base')
     show_RT(tcp2base_rmtxs, tcp2base_tvecs)
@@ -199,6 +189,37 @@ def calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_di
 
     return cam2base_rmtx, cam2base_tvec
 
+
+
+
+def show_RT(rmtxs, tvecs):
+    fig = plt.figure()
+    ax = fig.add_subplot(projection = '3d')
+
+    draw_axis(ax, rvec=np.matrix([[.0,.0,.0]]).T, tvec=np.matrix([[.0,.0,.0]]).T)
+
+    for i in range(len(rmtxs)):
+        rmtx = rmtxs[i]
+        check_rmtx(rmtx)
+        rvec = get_rvec(rmtx)
+        tvec = tvecs[i]
+        check_tvec(tvec)
+
+        draw_axis(ax, rvec=rvec, tvec=tvec, index=i)
+
+    set_axes_equal(ax)
+    plt.show()
+    
+def invert_RT_list(rmtx_list, tvec_list):
+    rmtx_inv_list = []
+    tvec_inv_list = []
+    for i in range(len(rmtx_list)):
+        rmtx = rmtx_list[i]
+        tvec = tvec_list[i]
+        rmtx_inv, tvec_inv = InvTransformRT(rmtx, tvec)
+        rmtx_inv_list.append(rmtx_inv)
+        tvec_inv_list.append(tvec_inv)
+    return rmtx_inv_list, tvec_inv_list
 
 
 def get_rmtx(rvec):
@@ -275,19 +296,6 @@ def Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist,center_di
 
     return rmtx, tvec
 
-def Get_Board2Cam_Transform_2D_EyeToHand(color_img_path, camera_mtx, camera_dist,center_distance):
-    # print("Using 2D-3D to compute the Transform Matrix between Board and Camera")
-    objectpoints = generate_calibration_board_points(11, 7, center_distance,center_distance)
-    color_img = cv2.imread(color_img_path, 0)
-    color_img = 255 - color_img
-    ret, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
-    _, rvec, tvec = cv2.solvePnP(objectpoints, centers, camera_mtx, camera_dist)
-    rmtx = get_rmtx(np.matrix(rvec))
-    tvec = np.matrix(tvec)
-    check_rmtx(rmtx)
-    check_tvec(tvec)
-
-    return rmtx, tvec
 
 def load_camera_params(params_file):
     params = np.loadtxt(params_file)
@@ -329,10 +337,6 @@ def Get_TCP2Base(pos_txt,num):
 def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num, use_2D=False, use_3D=False):
     board2cam_rmtxs = []
     board2cam_tvecs = []
-    print("bmp")
-    print(bright)
-    print("tiff")
-    print(depth)
 
     for i in range(num):
         color_img_path = bright[i]
@@ -345,26 +349,6 @@ def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num, use
 
     return board2cam_rmtxs, board2cam_tvecs
 
-def Get_Board2Cam_Transform_EyeToHand(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=False, use_3D=False):
-    board2cam_rmtxs = []
-    board2cam_tvecs = []
-
-    print("bmp")
-    print(bright)
-
-    bright_all=bright
-    depth_all=depth
-
-    for i in range(num):
-        color_img_path = bright_all[i]
-        depth_img_path = depth_all[i]
-
-        rmtx, tvec = Get_Board2Cam_Transform_2D_EyeToHand(color_img_path, camera_mtx, camera_dist,center_distance)
-
-        board2cam_rmtxs.append(rmtx)
-        board2cam_tvecs.append(tvec)
-
-    return board2cam_rmtxs, board2cam_tvecs
 
 def generate_calibration_board_points(xNum, yNum, xSpace, ySpace):
     objectpoints = []
