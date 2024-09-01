@@ -7,130 +7,6 @@ from scipy.spatial.transform import Rotation as R
 from draw_tools import draw_axis, set_axes_equal
 from spatial_transform import multiply_transform, invert_transform, get_rmtx, get_rvec, get_rvec_Yaskawa
 
-def calib_EyeInHand():
-    pos_txt = []
-    bright = []
-    depth = []
-
-    #圆心距
-    center_distance=20
-    #图片尺寸
-    width=1920
-    height=1200
-    #标定组数
-    num=8
-
-    param_txt_path = "input_EyeInHand/param.txt"
-    output_path = "output_EyeInHand/"
-
-    camera_mtx, camera_dist = load_camera_params(param_txt_path)
-
-    for i in range(num):
-        pos_txt.append(f'input_EyeInHand/pos{i}.txt')
-        bright.append(f'input_EyeInHand/pos{i}.bmp')
-        depth.append(f'input_EyeInHand/pos{i}.tiff')
-
-    # 获取夹爪和机械臂底座的关系
-    tcp2base_rmtx_list, tcp2base_rvec_list, tcp2base_tvec_list = Get_TCP2Base(pos_txt,num)
-
-    # 获取相机和标定板的关系
-    board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num)
-
-    # 计算出相机和夹爪的关系
-    cam2tcp_rmtx, cam2tcp_tvec = cv2.calibrateHandEye(tcp2base_rmtx_list, tcp2base_tvec_list, board2cam_rmtxs, board2cam_tvecs,
-                                                      method=cv2.CALIB_HAND_EYE_TSAI)
-    cam2tcp_rmtx = np.matrix(cam2tcp_rmtx)
-    cam2tcp_tvec = np.matrix(cam2tcp_tvec)
-
-    print('Cam2Tcp的数据如下(R、T):')
-    print("Cam2Tcp R:", cam2tcp_rmtx)
-    print("Cam2Tcp T:", cam2tcp_tvec)
-
-    cam2tcp_rvec = get_rvec(cam2tcp_rmtx)
-    
-    #通过cam2tcp和tcp2base，计算cam2base
-    cam2base_rvec_list = []
-    cam2base_tvec_list = []
-    for i in range(num):
-        tcp2base_rvec = tcp2base_rvec_list[i]
-        tcp2base_tvec = tcp2base_tvec_list[i]
-
-        cam2base_rvec, cam2base_tvec = multiply_transform(tcp2base_rvec, tcp2base_tvec, cam2tcp_rvec, cam2tcp_tvec)
-        cam2base_rvec_list.append(cam2base_rvec)
-        cam2base_tvec_list.append(cam2base_tvec)
-
-    # 通过cam2base，将点云旋转到base坐标系
-    generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, bright, depth, pos_txt, cam2base_rvec_list, cam2base_tvec_list, width, height, output_path,num)
-
-
-def calib_EyeToHand():
-    pos_txt = []
-    bright = []
-    depth = []
-
-    # 圆心距
-    center_distance = 40
-    # 图片尺寸
-    width = 1022
-    height = 768
-    # 标定组数
-    num = 5
-
-    param_txt_path = "input_EyeToHand/param.txt"
-    output_path = "output_EyeToHand/"
-
-    camera_mtx, camera_dist = load_camera_params(param_txt_path)
-    print(camera_mtx)
-    print(camera_dist)
-
-    for i in range(num):
-        pos_txt.append(f'input_EyeToHand/pos{i}.txt')
-        bright.append(f'input_EyeToHand/pos{i}.bmp')
-        depth.append(f'input_EyeToHand/pos{i}.tiff')
-
-    gripper2base_rmtx_list, gripper2base_rvec_list, gripper2base_tvec_list = Get_TCP2Base(pos_txt,num)
-
-    base2gripper_rmtx_list, base2gripper_tvec_list = invert_RT_list(gripper2base_rmtx_list, gripper2base_tvec_list)
-
-    board2cam_rmtx_list, board2cam_tvec_list = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num)
-
-    print('show tcp2base')
-    show_RT(gripper2base_rmtx_list, gripper2base_tvec_list)
-
-    print('show board2cam')
-    show_RT(board2cam_rmtx_list, board2cam_tvec_list)
-
-    # Refer to the opencv document for more details
-    # https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#gaebfc1c9f7434196a374c382abf43439b
-    cam2base_rmtx, cam2base_tvec = cv2.calibrateHandEye(base2gripper_rmtx_list, base2gripper_tvec_list, board2cam_rmtx_list, board2cam_tvec_list,
-                                                      method=cv2.CALIB_HAND_EYE_TSAI)
-
-    cam2base_rmtx = np.matrix(cam2base_rmtx)
-    cam2base_tvec = np.matrix(cam2base_tvec)
-
-    print('Cam2Base的数据如下(R、T)：')
-    print("Cam2Base R:", cam2base_rmtx)
-    print("Cam2Base T:", cam2base_tvec)
-    cam2base_rvec = get_rvec(cam2base_rmtx)
-
-    #通过 cam2gripper 和 gripper2base，计算cam2base
-    cam2gripper_rvec_list = []
-    cam2gripper_tvec_list = []
-    for i in range(num):
-        gripper2base_rvec = gripper2base_rvec_list[i]
-        gripper2base_tvec = gripper2base_tvec_list[i]
-
-        #求逆
-        base2gripper_rvec, base2gripper_tvec = invert_transform(gripper2base_rvec, gripper2base_tvec)
-
-        cam2gripper_rvec, cam2gripper_tvec = multiply_transform(base2gripper_rvec, base2gripper_tvec, cam2base_rvec, cam2base_tvec)
-        cam2gripper_rvec_list.append(cam2gripper_rvec)
-        cam2gripper_tvec_list.append(cam2gripper_tvec)
-
-    # 通过cam2gripper，将点云旋转到gripper坐标系
-    generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, bright, depth, pos_txt, cam2gripper_rvec_list, cam2gripper_tvec_list, width, height, output_path,num, depth_ratio=1000)
-
-
 
 def show_RT(rmtxs, tvecs):
     fig = plt.figure()
@@ -171,21 +47,6 @@ def load_depth_map(depth_tiff_file):
 
     return depth
 
-# def Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist,center_distance):
-#     # print("Using 2D-3D to compute the Transform Matrix between Board and Camera")
-#     objectpoints = generate_calibration_board_points(11, 7, center_distance,center_distance)
-#     color_img = cv2.imread(color_img_path, 0)
-#     color_img = 255 - color_img
-#     ret, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
-#     _, rvec, tvec = cv2.solvePnP(objectpoints, centers, camera_mtx, camera_dist)
-#     rmtx = get_rmtx(np.matrix(rvec))
-#     tvec = np.matrix(tvec)
-#     check_rmtx(rmtx)
-#     check_tvec(tvec)
-
-#     return rmtx, tvec
-
-
 def load_camera_params(params_file):
     params = np.loadtxt(params_file)
     camera_mtx = np.zeros((3, 3))
@@ -198,7 +59,7 @@ def load_camera_params(params_file):
 
     return camera_mtx, camera_dist
 
-def Get_TCP2Base(pos_txt,num):
+def load_gripper2base(pos_txt,num):
 
     tcp2base_rmtx_list = []
     tcp2base_rvec_list = []
@@ -223,7 +84,7 @@ def Get_TCP2Base(pos_txt,num):
     return tcp2base_rmtx_list, tcp2base_rvec_list, tcp2base_tvec_list
 
 
-def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num):
+def get_board2cam(bright,depth, camera_mtx, camera_dist,center_distance,num):
     board2cam_rmtxs = []
     board2cam_tvecs = []
 
@@ -231,7 +92,7 @@ def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num):
         color_img_path = bright[i]
         depth_img_path = depth[i]
 
-        #rmtx, tvec = Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist,center_distance)
+        #rmtx, tvec = get_board2cam_Transform_2D(color_img_path, camera_mtx, camera_dist,center_distance)
         objectpoints = generate_calibration_board_points(11, 7, center_distance,center_distance)
         color_img = cv2.imread(color_img_path, 0)
         color_img = 255 - color_img
@@ -264,7 +125,6 @@ def generate_calibration_board_points(xNum, yNum, xSpace, ySpace):
 
 def generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, bright, depth, pos_txt, cam2new_rvec_list, cam2new_tvec_list, width, height, output, num, depth_ratio=1):
 
-
     print("生成点云")
     print(bright)
     print(depth)
@@ -272,6 +132,7 @@ def generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, bright, dept
     depth_all = depth
 
     for i in range(num):
+        print(i)
         cam2new_rvec = cam2new_rvec_list[i]
         cam2new_rmtx = get_rmtx(cam2new_rvec)
         cam2new_tvec = cam2new_tvec_list[i]
@@ -301,7 +162,7 @@ def generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, bright, dept
     return 0
 
 
-def get_pointcloud_from_depthmap(depth, color, camera_mtx, camera_dist,width,height):
+def get_pointcloud_from_depthmap(depth, color, camera_mtx, camera_dist, width, height):
 
     ix, iy = np.meshgrid(range(width), range(height))
     ix = ix.flatten()
@@ -323,18 +184,3 @@ def get_pointcloud_from_depthmap(depth, color, camera_mtx, camera_dist,width,hei
     pointcloud = pointcloud[pointcloud[:, 2] > 0]
 
     return pointcloud
-
-
-def Get_Camera_Position(cam2tcp_rmtx, cam2tcp_tvec, tcp2base_rmtx, tcp2base_tvec):
-    cam_pos_rmtx = tcp2base_rmtx * cam2tcp_rmtx
-    cam_pos_tvec = tcp2base_rmtx * cam2tcp_tvec + tcp2base_tvec
-    return cam_pos_rmtx, cam_pos_tvec
-
-
-if __name__ == '__main__':
-    #EyeInHand
-    calib_EyeInHand()
-
-    #EyeToHand
-    calib_EyeToHand()
-
