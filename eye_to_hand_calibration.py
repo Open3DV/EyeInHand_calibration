@@ -5,9 +5,9 @@ from calib_utils import show_RT, invert_RT_list, load_camera_params, load_grippe
 
 
 
-pos_txt = []
-bright = []
-depth = []
+robot_pose_filenames = []
+color_image_filenames = []
+depth_map_filenames = []
 
 # 圆心距
 center_distance = 40
@@ -23,18 +23,19 @@ output_path = "output_EyeToHand/"
 camera_mtx, camera_dist = load_camera_params(param_txt_path)
 
 for i in range(num):
-    pos_txt.append(f'input_EyeToHand/pos{i}.txt')
-    bright.append(f'input_EyeToHand/pos{i}.bmp')
-    depth.append(f'input_EyeToHand/pos{i}.tiff')
+    robot_pose_filenames.append(f'input_EyeToHand/pos{i}.txt')
+    color_image_filenames.append(f'input_EyeToHand/pos{i}.bmp')
+    depth_map_filenames.append(f'input_EyeToHand/pos{i}.tiff')
 
 # 获取夹爪和机械臂底座的关系
-gripper2base_rmtx_list, gripper2base_rvec_list, gripper2base_tvec_list = load_gripper2base(pos_txt,num)
+gripper2base_rmtx_list, gripper2base_rvec_list, gripper2base_tvec_list = load_gripper2base(robot_pose_filenames,num)
 
 # gripper2base求逆得到base2gripper
 base2gripper_rmtx_list, base2gripper_tvec_list = invert_RT_list(gripper2base_rmtx_list, gripper2base_tvec_list)
 
 # 获取相机和标定板的关系
-board2cam_rmtx_list, board2cam_tvec_list = get_board2cam(bright, depth, camera_mtx, camera_dist,center_distance,num)
+board2cam_rmtx_list, board2cam_tvec_list = get_board2cam(color_image_filenames, depth_map_filenames, 
+                                                         camera_mtx, camera_dist,center_distance,num)
 
 print('show gripper2base')
 show_RT(gripper2base_rmtx_list, gripper2base_tvec_list)
@@ -70,5 +71,7 @@ for i in range(num):
     cam2gripper_tvec_list.append(cam2gripper_tvec)
 
 # 通过cam2gripper，将点云旋转到gripper坐标系
-generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, bright, depth, pos_txt, cam2gripper_rvec_list, cam2gripper_tvec_list, width, height, output_path,num, depth_ratio=1000)
+generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, 
+                                       color_image_filenames, depth_map_filenames, robot_pose_filenames, 
+									   cam2gripper_rvec_list, cam2gripper_tvec_list, width, height, output_path,num, depth_ratio=1000)
 
