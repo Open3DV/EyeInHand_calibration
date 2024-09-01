@@ -1,12 +1,7 @@
 import cv2
 import numpy as np
-import os
-from tqdm import trange
-import matplotlib.pyplot as plt
-from scipy.spatial.transform import Rotation as R
-from draw_tools import draw_axis, set_axes_equal
 from spatial_transform import multiply_transform, invert_transform, get_rmtx, get_rvec, get_rvec_Yaskawa
-from calib import show_RT, invert_RT_list, load_camera_params, load_gripper2base, get_board2cam, generate_pointclouds_in_new_coordinate
+from calib_utils import show_RT, invert_RT_list, load_camera_params, load_gripper2base, get_board2cam, generate_pointclouds_in_new_coordinate
 
 
 
