@@ -63,7 +63,7 @@ def calib_EyeToHand():
     # 用于从点云生成标定数据，并保存cam2tcp
     cam2base_rmtx,cam2base_tvec=calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_distance,output_path,num)
     # 产生同坐标系下点云
-    #注意，本组数据tiff单位为m,所以Generate_Pointcloud_From_Depth_undistort_EyeToHand函数内，x,y,z各*1000，若以mm为单位时自行修改
+    #注意，本组数据tiff单位为m,所以get_pointcloud_from_depthmap_EyeToHand函数内，x,y,z各*1000，若以mm为单位时自行修改
     New_Generate_Pointclouds_EyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt, cam2base_rmtx, cam2base_tvec, width, height, output_path,num)
 
 
@@ -139,7 +139,7 @@ def calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_di
     board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam_Transform_EyeToHand(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
 
     print('show tcp2base')
-    show_RT(base2tcp_rmtxs, base2tcp_tvecs)
+    show_RT(tcp2base_rmtxs, tcp2base_tvecs)
 
     print('show board2cam')
     show_RT(board2cam_rmtxs, board2cam_tvecs)
@@ -148,6 +148,8 @@ def calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_di
     # Not robust for computing pose for Camera 2 Board
     #Transform_BoardCenters_FromCameraToBoard(bright, depth, camera_mtx, camera_dist,center_distance,num, use_2D=True)
 
+    # Refer to the opencv document for more details
+    # https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#gaebfc1c9f7434196a374c382abf43439b
     cam2base_rmtx, cam2base_tvec = cv2.calibrateHandEye(base2tcp_rmtxs, base2tcp_tvecs, board2cam_rmtxs, board2cam_tvecs,
                                                       method=cv2.CALIB_HAND_EYE_TSAI)
 
@@ -227,7 +229,7 @@ def get_rvec_Yaskawa(rx, ry, rz):
     check_rvec(rvec)
     return rvec
 
-def Loading_Depth_From_Tiff(depth_file):
+def load_depth_map(depth_file):
 
     depth = cv2.imread(depth_file, -1)
     depth = np.float32(np.array(depth))
@@ -310,12 +312,13 @@ def Get_Board2Cam_Transform_2D_EyeToHand(color_img_path, camera_mtx, camera_dist
     return rmtx, tvec
 
 def Get_Board2Cam_Transform_3D(color_img_path, depth_img_path, camera_mtx, camera_dist,center_distance):
+    assert 0
     # print("Using 3D-3D to compute the Transform Matrix between Board and Camera")
     objectpoints = CircleObjectPointsGenerate(11, 7, center_distance, center_distance)
     color_img = cv2.imread(color_img_path, 0)
     color_img = 255 - color_img
     _, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
-    depth = Loading_Depth_From_Tiff(depth_img_path)
+    depth = load_depth_map(depth_img_path)
     # depth = Depth_Middle_Fliter(depth)
     # Filter is needed for depth?
     centers_undistort = cv2.undistortPoints(centers, camera_mtx, camera_dist)
@@ -337,13 +340,14 @@ def Get_Board2Cam_Transform_3D(color_img_path, depth_img_path, camera_mtx, camer
     return rmtx, tvec
 
 def Get_Board2Cam_Transform_3D_EyeToHand(color_img_path, depth_img_path, camera_mtx, camera_dist,center_distance):
+    assert 0
     # print("Using 3D-3D to compute the Transform Matrix between Board and Camera")
     objectpoints = CircleObjectPointsGenerate(11, 7, center_distance, center_distance)
     color_img = cv2.imread(color_img_path, 0)
     color_img = 255 - color_img
     _, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
 
-    depth = Loading_Depth_From_Tiff(depth_img_path)
+    depth = load_depth_map(depth_img_path)
     print(depth)
 
     # depth = Depth_Middle_Fliter(depth)
@@ -402,31 +406,6 @@ def Get_TCP2Base(pos_txt,num):
 
     return tcp2base_rmtx_list, tcp2base_rvec_list, tcp2base_tvec_list
 
-
-# def Get_Base2TCP(pos_txt,num):
-
-#     base2tcp_rmtx_list = []
-#     base2tcp_tvec_list = []
-
-#     print('txt')
-#     print(pos_txt)
-#     for i in range(num):
-#         data = pos_txt[i]
-#         f = open(data, "r")
-#         lines = f.readlines()  # 读取全部内容
-#         list1 = []
-#         for line in lines:
-#             list1.append(line.strip().split('\t'))
-#         rvec = get_rvec_Yaskawa(list1[0][0], list1[1][0], list1[2][0])
-#         tvec = np.matrix([list1[3][0], list1[4][0], list1[5][0]], dtype=np.float32).T
-#         rmtx = get_rmtx(rvec)
-
-#         inverse = np.linalg.inv(rmtx)
-#         tvc = (-inverse * tvec)
-#         base2tcp_rmtx_list.append(inverse)
-#         base2tcp_tvec_list.append(tvc)
-
-#     return base2tcp_rmtx_list, base2tcp_tvec_list
 
 def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num, use_2D=False, use_3D=False):
     board2cam_rmtxs = []
@@ -537,7 +516,7 @@ def Get_Board_Centers_3D(color_img_path, depth_img_path, camera_mtx, camera_dist
     color_img = cv2.imread(color_img_path, 0)
     color_img = 255 - color_img
     _, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
-    depth = Loading_Depth_From_Tiff(depth_img_path)
+    depth = load_depth_map(depth_img_path)
     centers_undistort = cv2.undistortPoints(centers, camera_mtx, camera_dist)
     centers_3d = []
     for i in range(len(centers)):
@@ -568,8 +547,8 @@ def New_Generate_Pointclouds_EyeInHand(camera_mtx, camera_dist,bright,depth,pos_
         depth_img_path = depth_all[i]
 
         color = cv2.imread(color_img_path)
-        depth = Loading_Depth_From_Tiff(depth_img_path)
-        pointcloud = Generate_Pointcloud_From_Depth_undistort(depth, color, camera_mtx, camera_dist,width,height)
+        depth = load_depth_map(depth_img_path)
+        pointcloud = get_pointcloud_from_depthmap(depth, color, camera_mtx, camera_dist,width,height)
 
 
         data = pos_txt[i]
@@ -596,7 +575,7 @@ def New_Generate_Pointclouds_EyeInHand(camera_mtx, camera_dist,bright,depth,pos_
         pointcloud_base[:, :3] = pts
         pointcloud_base[:, 3:] = color
         list=['pos0','pos1','pos2','pos3','pos4','pos5','pos6','pos7',]
-        np.savetxt(os.path.join(output, list[i] + '_base_new.xyz'), pointcloud_base)
+        np.savetxt(os.path.join(output, list[i] + '_base_new.xyz'), pointcloud_base, fmt='%.2f')
 
     return 0
 
@@ -614,8 +593,8 @@ def New_Generate_Pointclouds_EyeToHand(camera_mtx, camera_dist, bright, depth, p
         color_img_path = bright_all[i]
         depth_img_path = depth_all[i]
         color = cv2.imread(color_img_path)
-        depth = Loading_Depth_From_Tiff(depth_img_path)
-        pointcloud = Generate_Pointcloud_From_Depth_undistort(depth*1000, color, camera_mtx, camera_dist, width,height)
+        depth = load_depth_map(depth_img_path)
+        pointcloud = get_pointcloud_from_depthmap(depth*1000, color, camera_mtx, camera_dist, width,height)
 
         # 通过计算得到需要的参数
         pointcloud_base = np.zeros_like(pointcloud)
@@ -645,52 +624,33 @@ def New_Generate_Pointclouds_EyeToHand(camera_mtx, camera_dist, bright, depth, p
         pointcloud_base[:, :3] = pts
         pointcloud_base[:, 3:] = color
         list = ['pos0', 'pos1', 'pos2', 'pos3', 'pos4', 'pos5', 'pos6', 'pos7', ]
-        np.savetxt(os.path.join(output_path, list[i] + '_base_new.xyz'), pointcloud_base)
+        np.savetxt(os.path.join(output_path, list[i] + '_base_new.xyz'), pointcloud_base, fmt='%.2f')
     return 0
 
 
+def get_pointcloud_from_depthmap(depth, color, camera_mtx, camera_dist,width,height):
 
-def Generate_Pointcloud_From_Depth_undistort(depth, color, camera_mtx, camera_dist,width,height,):
-    pointcloud = []
+    ix, iy = np.meshgrid(range(width), range(height))
+    ix = ix.flatten()
+    iy = iy.flatten()
 
-    for iy in trange(height):
-        for ix in range(width):
-            # 先对图片去畸变
-            ixiy = cv2.undistortPoints(np.float32(np.array([ix, iy])), camera_mtx, camera_dist)
-            z = depth[iy, ix]
-            r, g, b = color[iy, ix]
-            if z > 0:
-                x = ixiy[0, 0, 0] * z
-                y = ixiy[0, 0, 1] * z
-                pts = np.array([x, y, z, r, g, b])
-                pointcloud.append(pts)
+    depth = depth.flatten()
+    color = color.reshape(-1, 3)
+    ixiy = np.array(np.vstack((ix, iy)).T, dtype=np.float32)
+    
+    ixiy = cv2.undistortPoints(ixiy, camera_mtx, camera_dist)
+    
+    z = depth
+    x = ixiy[:, 0, 0] * z
+    y = ixiy[:, 0, 1] * z
+    pointcloud = np.vstack((x, y, z)).T
+    pointcloud = np.hstack((pointcloud, color))
 
-    pointcloud = np.array(pointcloud)
+    # remove invalid points
+    pointcloud = pointcloud[pointcloud[:, 2] > 0]
+
     return pointcloud
 
-# def Generate_Pointcloud_From_Depth_undistort_EyeToHand(depth, color, camera_mtx, camera_dist,width,height):
-
-#     pointcloud = []
-#     for iy in trange(height):
-#         for ix in range(width):
-#             # 先对图片去畸变
-#             ixiy = cv2.undistortPoints(np.float32(np.array([ix, iy])), camera_mtx, camera_dist)
-#             z = depth[iy, ix]
-#             r, g, b = color[iy, ix]
-#             if z > 0:
-#                 x = ixiy[0, 0, 0] * z
-#                 y = ixiy[0, 0, 1] * z
-#                 pts = np.array([x*1000, y*1000, z*1000, r, g, b])
-#                 pointcloud.append(pts)
-
-#     pointcloud = np.array(pointcloud)
-#     return pointcloud
-
-# def Loading_Depth_From_Tiff(depth_file):
-
-#     depth = cv2.imread(depth_file, -1)
-#     depth = np.float32(np.array(depth))
-#     return depth
 
 def Get_Camera_Position(cam2tcp_rmtx, cam2tcp_tvec, tcp2base_rmtx, tcp2base_tvec):
     cam_pos_rmtx = tcp2base_rmtx * cam2tcp_rmtx
