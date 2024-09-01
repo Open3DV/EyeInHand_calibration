@@ -22,7 +22,7 @@ def calib_EyeInHand():
     param_txt_path = "input_EyeInHand/param.txt"
     output_path = "output_EyeInHand/"
 
-    camera_mtx, camera_dist = Loading_Params_From_Txt(param_txt_path)
+    camera_mtx, camera_dist = load_camera_params(param_txt_path)
 
     for i in range(num):
         pos_txt.append(f'input_EyeInHand/pos{i}.txt')
@@ -50,7 +50,7 @@ def calib_EyeToHand():
     param_txt_path = "input_EyeToHand/param.txt"
     output_path = "output_EyeToHand/"
 
-    camera_mtx, camera_dist = Loading_Params_From_Txt(param_txt_path)
+    camera_mtx, camera_dist = load_camera_params(param_txt_path)
     print(camera_mtx)
     print(camera_dist)
 
@@ -118,11 +118,23 @@ def show_RT(rmtxs, tvecs):
     set_axes_equal(ax)
     plt.show()
     
+def invert_RT_list(rmtx_list, tvec_list):
+    rmtx_inv_list = []
+    tvec_inv_list = []
+    for i in range(len(rmtx_list)):
+        rmtx = rmtx_list[i]
+        tvec = tvec_list[i]
+        rmtx_inv, tvec_inv = InvTransformRT(rmtx, tvec)
+        rmtx_inv_list.append(rmtx_inv)
+        tvec_inv_list.append(tvec_inv)
+    return rmtx_inv_list, tvec_inv_list
 
 def calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_distance,output_path,num):
 
-    base2tcp_rmtxs, base2tcp_tvecs = Get_Base2TCP(pos_txt,num)
-    #tcp2base_rmtxs, tcp2base_rvecs, tcp2base_tvecs = Get_TCP2Base(pos_txt,num)
+    #base2tcp_rmtxs, base2tcp_tvecs = Get_Base2TCP(pos_txt,num)
+    tcp2base_rmtxs, tcp2base_rvecs, tcp2base_tvecs = Get_TCP2Base(pos_txt,num)
+
+    base2tcp_rmtxs, base2tcp_tvecs = invert_RT_list(tcp2base_rmtxs, tcp2base_tvecs)
 
     board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam_Transform_EyeToHand(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
 
@@ -354,7 +366,7 @@ def Get_Board2Cam_Transform_3D_EyeToHand(color_img_path, depth_img_path, camera_
 
     return rmtx, tvec
 
-def Loading_Params_From_Txt(params_file):
+def load_camera_params(params_file):
     params = np.loadtxt(params_file)
     camera_mtx = np.zeros((3, 3))
     camera_mtx[0, 0] = params[0]
@@ -368,9 +380,9 @@ def Loading_Params_From_Txt(params_file):
 
 def Get_TCP2Base(pos_txt,num):
 
-    tcp2base_rmtxs = []
-    tcp2base_rvecs = []
-    tcp2base_tvecs = []
+    tcp2base_rmtx_list = []
+    tcp2base_rvec_list = []
+    tcp2base_tvec_list = []
 
     print('txt')
     print(pos_txt)
@@ -384,37 +396,37 @@ def Get_TCP2Base(pos_txt,num):
         rvec = get_rvec_Yaskawa(list1[0][0], list1[1][0], list1[2][0])
         tvec = np.matrix([list1[3][0], list1[4][0], list1[5][0]], dtype=np.float32).T
         rmtx = get_rmtx(rvec)
-        tcp2base_rvecs.append(rvec)
-        tcp2base_rmtxs.append(rmtx)
-        tcp2base_tvecs.append(tvec)
+        tcp2base_rvec_list.append(rvec)
+        tcp2base_rmtx_list.append(rmtx)
+        tcp2base_tvec_list.append(tvec)
 
-    return tcp2base_rmtxs, tcp2base_rvecs, tcp2base_tvecs
+    return tcp2base_rmtx_list, tcp2base_rvec_list, tcp2base_tvec_list
 
 
-def Get_Base2TCP(pos_txt,num):
+# def Get_Base2TCP(pos_txt,num):
 
-    base2tcp_rmtx_list = []
-    base2tcp_tvec_list = []
+#     base2tcp_rmtx_list = []
+#     base2tcp_tvec_list = []
 
-    print('txt')
-    print(pos_txt)
-    for i in range(num):
-        data = pos_txt[i]
-        f = open(data, "r")
-        lines = f.readlines()  # 读取全部内容
-        list1 = []
-        for line in lines:
-            list1.append(line.strip().split('\t'))
-        rvec = get_rvec_Yaskawa(list1[0][0], list1[1][0], list1[2][0])
-        tvec = np.matrix([list1[3][0], list1[4][0], list1[5][0]], dtype=np.float32).T
-        rmtx = get_rmtx(rvec)
+#     print('txt')
+#     print(pos_txt)
+#     for i in range(num):
+#         data = pos_txt[i]
+#         f = open(data, "r")
+#         lines = f.readlines()  # 读取全部内容
+#         list1 = []
+#         for line in lines:
+#             list1.append(line.strip().split('\t'))
+#         rvec = get_rvec_Yaskawa(list1[0][0], list1[1][0], list1[2][0])
+#         tvec = np.matrix([list1[3][0], list1[4][0], list1[5][0]], dtype=np.float32).T
+#         rmtx = get_rmtx(rvec)
 
-        inverse = np.linalg.inv(rmtx)
-        tvc = (-inverse * tvec)
-        base2tcp_rmtx_list.append(inverse)
-        base2tcp_tvec_list.append(tvc)
+#         inverse = np.linalg.inv(rmtx)
+#         tvc = (-inverse * tvec)
+#         base2tcp_rmtx_list.append(inverse)
+#         base2tcp_tvec_list.append(tvc)
 
-    return base2tcp_rmtx_list, base2tcp_tvec_list
+#     return base2tcp_rmtx_list, base2tcp_tvec_list
 
 def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num, use_2D=False, use_3D=False):
     board2cam_rmtxs = []
@@ -674,11 +686,11 @@ def Generate_Pointcloud_From_Depth_undistort(depth, color, camera_mtx, camera_di
 #     pointcloud = np.array(pointcloud)
 #     return pointcloud
 
-def Loading_Depth_From_Tiff(depth_file):
+# def Loading_Depth_From_Tiff(depth_file):
 
-    depth = cv2.imread(depth_file, -1)
-    depth = np.float32(np.array(depth))
-    return depth
+#     depth = cv2.imread(depth_file, -1)
+#     depth = np.float32(np.array(depth))
+#     return depth
 
 def Get_Camera_Position(cam2tcp_rmtx, cam2tcp_tvec, tcp2base_rmtx, tcp2base_tvec):
     cam_pos_rmtx = tcp2base_rmtx * cam2tcp_rmtx
