@@ -5,7 +5,7 @@ from tqdm import trange
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 from draw_tools import draw_axis, set_axes_equal
-from spatial_transform import multiply_transform, invert_transform
+from spatial_transform import multiply_transform, invert_transform, get_rmtx, get_rvec, get_rvec_Yaskawa
 
 def calib_EyeInHand():
     pos_txt = []
@@ -34,7 +34,7 @@ def calib_EyeInHand():
     tcp2base_rmtx_list, tcp2base_rvec_list, tcp2base_tvec_list = Get_TCP2Base(pos_txt,num)
 
     # 获取相机和标定板的关系
-    board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
+    board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num)
 
     # 计算出相机和夹爪的关系
     cam2tcp_rmtx, cam2tcp_tvec = cv2.calibrateHandEye(tcp2base_rmtx_list, tcp2base_tvec_list, board2cam_rmtxs, board2cam_tvecs,
@@ -92,7 +92,7 @@ def calib_EyeToHand():
 
     base2gripper_rmtx_list, base2gripper_tvec_list = invert_RT_list(gripper2base_rmtx_list, gripper2base_tvec_list)
 
-    board2cam_rmtx_list, board2cam_tvec_list = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
+    board2cam_rmtx_list, board2cam_tvec_list = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num)
 
     print('show tcp2base')
     show_RT(gripper2base_rmtx_list, gripper2base_tvec_list)
@@ -140,10 +140,8 @@ def show_RT(rmtxs, tvecs):
 
     for i in range(len(rmtxs)):
         rmtx = rmtxs[i]
-        check_rmtx(rmtx)
         rvec = get_rvec(rmtx)
         tvec = tvecs[i]
-        check_tvec(tvec)
 
         draw_axis(ax, rvec=rvec, tvec=tvec, index=i)
 
@@ -165,49 +163,6 @@ def invert_RT_list(rmtx_list, tvec_list):
     return rmtx_inv_list, tvec_inv_list
 
 
-def get_rmtx(rvec):
-    check_rvec(rvec)
-    rmtx, _ = cv2.Rodrigues(rvec)
-    rmtx = np.matrix(rmtx)
-    check_rmtx(rmtx)
-    return rmtx
-
-
-
-def get_rvec(rmtx):
-    check_rmtx(rmtx)
-    rvec, _ = cv2.Rodrigues(rmtx)
-    rvec = np.matrix(rvec)
-    check_rvec(rvec)
-    return rvec
-
-def check_tvec(tvec):
-    assert tvec.__class__.__name__ == 'matrix'
-    assert tvec.ndim == 2
-    assert tvec.shape == (3, 1)
-    assert tvec.dtype == np.float32 or tvec.dtype == np.float64
-
-def check_rvec(rvec):
-    assert rvec.__class__.__name__ == 'matrix'
-    assert rvec.ndim == 2
-    assert rvec.shape == (3, 1)
-    assert rvec.dtype == np.float32 or rvec.dtype == np.float64
-
-def check_rmtx(rmtx):
-    assert rmtx.__class__.__name__ == 'matrix'
-    assert rmtx.ndim == 2
-    assert rmtx.shape == (3, 3)
-    assert rmtx.dtype == np.float32 or rmtx.dtype == np.float64
-
-def get_rvec_Yaskawa(rx, ry, rz):
-    euler_angle = [rx, ry, rz]
-    rmtx = R.from_euler('xyz', euler_angle, degrees=True).as_matrix()
-    rmtx = np.matrix(rmtx, dtype=np.float32)
-    rvec, _ = cv2.Rodrigues(rmtx)
-    rvec = np.matrix(rvec)
-
-    check_rvec(rvec)
-    return rvec
 
 def load_depth_map(depth_tiff_file):
 
@@ -216,19 +171,19 @@ def load_depth_map(depth_tiff_file):
 
     return depth
 
-def Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist,center_distance):
-    # print("Using 2D-3D to compute the Transform Matrix between Board and Camera")
-    objectpoints = generate_calibration_board_points(11, 7, center_distance,center_distance)
-    color_img = cv2.imread(color_img_path, 0)
-    color_img = 255 - color_img
-    ret, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
-    _, rvec, tvec = cv2.solvePnP(objectpoints, centers, camera_mtx, camera_dist)
-    rmtx = get_rmtx(np.matrix(rvec))
-    tvec = np.matrix(tvec)
-    check_rmtx(rmtx)
-    check_tvec(tvec)
+# def Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist,center_distance):
+#     # print("Using 2D-3D to compute the Transform Matrix between Board and Camera")
+#     objectpoints = generate_calibration_board_points(11, 7, center_distance,center_distance)
+#     color_img = cv2.imread(color_img_path, 0)
+#     color_img = 255 - color_img
+#     ret, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
+#     _, rvec, tvec = cv2.solvePnP(objectpoints, centers, camera_mtx, camera_dist)
+#     rmtx = get_rmtx(np.matrix(rvec))
+#     tvec = np.matrix(tvec)
+#     check_rmtx(rmtx)
+#     check_tvec(tvec)
 
-    return rmtx, tvec
+#     return rmtx, tvec
 
 
 def load_camera_params(params_file):
@@ -268,7 +223,7 @@ def Get_TCP2Base(pos_txt,num):
     return tcp2base_rmtx_list, tcp2base_rvec_list, tcp2base_tvec_list
 
 
-def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num, use_2D=False, use_3D=False):
+def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num):
     board2cam_rmtxs = []
     board2cam_tvecs = []
 
@@ -276,7 +231,14 @@ def Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num, use
         color_img_path = bright[i]
         depth_img_path = depth[i]
 
-        rmtx, tvec = Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist,center_distance)
+        #rmtx, tvec = Get_Board2Cam_Transform_2D(color_img_path, camera_mtx, camera_dist,center_distance)
+        objectpoints = generate_calibration_board_points(11, 7, center_distance,center_distance)
+        color_img = cv2.imread(color_img_path, 0)
+        color_img = 255 - color_img
+        ret, centers = cv2.findCirclesGrid(color_img, (7, 11), flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
+        _, rvec, tvec = cv2.solvePnP(objectpoints, centers, camera_mtx, camera_dist)
+        rmtx = get_rmtx(np.matrix(rvec))
+        tvec = np.matrix(tvec)
 
         board2cam_rmtxs.append(rmtx)
         board2cam_tvecs.append(tvec)
