@@ -90,7 +90,27 @@ def calib_EyeToHand():
 
     gripper2base_rmtx_list, gripper2base_rvec_list, gripper2base_tvec_list = Get_TCP2Base(pos_txt,num)
 
-    cam2base_rmtx, cam2base_tvec=calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_distance,output_path,num)
+    base2gripper_rmtx_list, base2gripper_tvec_list = invert_RT_list(gripper2base_rmtx_list, gripper2base_tvec_list)
+
+    board2cam_rmtx_list, board2cam_tvec_list = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
+
+    print('show tcp2base')
+    show_RT(gripper2base_rmtx_list, gripper2base_tvec_list)
+
+    print('show board2cam')
+    show_RT(board2cam_rmtx_list, board2cam_tvec_list)
+
+    # Refer to the opencv document for more details
+    # https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#gaebfc1c9f7434196a374c382abf43439b
+    cam2base_rmtx, cam2base_tvec = cv2.calibrateHandEye(base2gripper_rmtx_list, base2gripper_tvec_list, board2cam_rmtx_list, board2cam_tvec_list,
+                                                      method=cv2.CALIB_HAND_EYE_TSAI)
+
+    cam2base_rmtx = np.matrix(cam2base_rmtx)
+    cam2base_tvec = np.matrix(cam2base_tvec)
+
+    print('Cam2Base的数据如下(R、T)：')
+    print("Cam2Base R:", cam2base_rmtx)
+    print("Cam2Base T:", cam2base_tvec)
     cam2base_rvec = get_rvec(cam2base_rmtx)
 
     #通过 cam2gripper 和 gripper2base，计算cam2base
@@ -109,43 +129,6 @@ def calib_EyeToHand():
 
     # 通过cam2gripper，将点云旋转到gripper坐标系
     generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, bright, depth, pos_txt, cam2gripper_rvec_list, cam2gripper_tvec_list, width, height, output_path,num, depth_ratio=1000)
-
-
-
-def calibrateEyeInHand(camera_mtx, camera_dist, bright, depth, pos_txt, center_distance,output,num):
-
-    tcp2base_rmtxs, tcp2base_rvecs, tcp2base_tvecs = Get_TCP2Base(pos_txt,num)
-    # print(tcp2base_rmtxs)
-    # print(tcp2base_tvecs)
-    # assert 0
-
-    board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam(bright,depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
-    # print(board2cam_rmtxs)
-    # print(board2cam_tvecs)
-    # assert 0
-
-    cam2tcp_rmtx, cam2tcp_tvec = cv2.calibrateHandEye(tcp2base_rmtxs, tcp2base_tvecs, board2cam_rmtxs, board2cam_tvecs,
-                                                      method=cv2.CALIB_HAND_EYE_TSAI)
-    cam2tcp_rmtx = np.matrix(cam2tcp_rmtx)
-    cam2tcp_tvec = np.matrix(cam2tcp_tvec)
-
-    print('Cam2Tcp的数据如下(R、T):')
-    print("Cam2Tcp R:", cam2tcp_rmtx)
-    print("Cam2Tcp T:", cam2tcp_tvec)
-
-    data=[]
-    for i in range(3):
-        for j in range(3):
-            data.append(round(cam2tcp_rmtx[i, j],8))
-    for g in range(3):
-            data.append(round(cam2tcp_tvec[g, 0],8))
-
-    file_path = os.path.join(os.getcwd(), output, 'result.txt')
-    with open(file_path, 'w') as file:
-        for item in data:
-            file.write(str(item) + '\n')
-
-    return cam2tcp_rmtx, cam2tcp_tvec
 
 
 def calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_distance,output_path,num):
@@ -437,7 +420,7 @@ def Get_Camera_Position(cam2tcp_rmtx, cam2tcp_tvec, tcp2base_rmtx, tcp2base_tvec
 
 if __name__ == '__main__':
     #EyeInHand
-    calib_EyeInHand()
+    #calib_EyeInHand()
 
     #EyeToHand
     calib_EyeToHand()
