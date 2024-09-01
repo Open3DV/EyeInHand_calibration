@@ -9,12 +9,12 @@ pos_txt = []
 bright = []
 depth = []
 
-#圆心距
+# 圆心距
 center_distance=20
-#图片尺寸
+# 图片尺寸
 width=1920
 height=1200
-#标定组数
+# 标定组数
 num=8
 
 param_txt_path = "input_EyeInHand/param.txt"
@@ -33,7 +33,6 @@ gripper2base_rmtx_list, gripper2base_rvec_list, gripper2base_tvec_list = load_gr
 # 获取相机和标定板的关系
 board2cam_rmtx_list, board2cam_tvec_list = get_board2cam(bright, depth, camera_mtx, camera_dist,center_distance,num)
 
-
 print('show gripper2base')
 show_RT(gripper2base_rmtx_list, gripper2base_tvec_list)
 
@@ -45,6 +44,7 @@ show_RT(board2cam_rmtx_list, board2cam_tvec_list)
 # https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#gaebfc1c9f7434196a374c382abf43439b
 cam2gripper_rmtx, cam2gripper_tvec = cv2.calibrateHandEye(gripper2base_rmtx_list, gripper2base_tvec_list, board2cam_rmtx_list, board2cam_tvec_list,
                                                     method=cv2.CALIB_HAND_EYE_TSAI)
+
 cam2gripper_rmtx = np.matrix(cam2gripper_rmtx)
 cam2gripper_tvec = np.matrix(cam2gripper_tvec)
 
@@ -54,7 +54,7 @@ print("Cam2gripper T:", cam2gripper_tvec)
 
 cam2gripper_rvec = get_rvec(cam2gripper_rmtx)
 
-#通过cam2gripper和gripper2base，计算cam2base
+#通过cam2gripper 和 gripper2base，计算cam2base
 cam2base_rvec_list = []
 cam2base_tvec_list = []
 for i in range(num):
@@ -67,3 +67,4 @@ for i in range(num):
 
 # 通过cam2base，将点云旋转到base坐标系
 generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, bright, depth, pos_txt, cam2base_rvec_list, cam2base_tvec_list, width, height, output_path,num)
+

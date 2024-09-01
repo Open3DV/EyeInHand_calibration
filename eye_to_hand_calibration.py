@@ -30,6 +30,7 @@ for i in range(num):
 # 获取夹爪和机械臂底座的关系
 gripper2base_rmtx_list, gripper2base_rvec_list, gripper2base_tvec_list = load_gripper2base(pos_txt,num)
 
+# gripper2base求逆得到base2gripper
 base2gripper_rmtx_list, base2gripper_tvec_list = invert_RT_list(gripper2base_rmtx_list, gripper2base_tvec_list)
 
 # 获取相机和标定板的关系
@@ -53,17 +54,16 @@ cam2base_tvec = np.matrix(cam2base_tvec)
 print('Cam2Base的数据如下(R、T)：')
 print("Cam2Base R:", cam2base_rmtx)
 print("Cam2Base T:", cam2base_tvec)
+
 cam2base_rvec = get_rvec(cam2base_rmtx)
 
-#通过 cam2base 和 gripper2base，计算cam2gripper
+#通过 cam2base 和 base2gripper，计算cam2gripper
 cam2gripper_rvec_list = []
 cam2gripper_tvec_list = []
 for i in range(num):
-    gripper2base_rvec = gripper2base_rvec_list[i]
-    gripper2base_tvec = gripper2base_tvec_list[i]
-
-    #求逆
-    base2gripper_rvec, base2gripper_tvec = invert_transform(gripper2base_rvec, gripper2base_tvec)
+    base2gripper_rmtx = base2gripper_rmtx_list[i]
+    base2gripper_tvec = base2gripper_tvec_list[i]
+    base2gripper_rvec = get_rvec(base2gripper_rmtx)
 
     cam2gripper_rvec, cam2gripper_tvec = multiply_transform(base2gripper_rvec, base2gripper_tvec, cam2base_rvec, cam2base_tvec)
     cam2gripper_rvec_list.append(cam2gripper_rvec)
