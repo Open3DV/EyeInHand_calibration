@@ -131,49 +131,6 @@ def calib_EyeToHand():
     generate_pointclouds_in_new_coordinate(camera_mtx, camera_dist, bright, depth, pos_txt, cam2gripper_rvec_list, cam2gripper_tvec_list, width, height, output_path,num, depth_ratio=1000)
 
 
-def calibrateEyeToHand(camera_mtx, camera_dist, bright, depth, pos_txt,center_distance,output_path,num):
-
-    #base2tcp_rmtxs, base2tcp_tvecs = Get_Base2TCP(pos_txt,num)
-    tcp2base_rmtxs, tcp2base_rvecs, tcp2base_tvecs = Get_TCP2Base(pos_txt,num)
-
-    base2tcp_rmtxs, base2tcp_tvecs = invert_RT_list(tcp2base_rmtxs, tcp2base_tvecs)
-
-    board2cam_rmtxs, board2cam_tvecs = Get_Board2Cam(bright, depth, camera_mtx, camera_dist,center_distance,num,use_2D=True)
-
-    print('show tcp2base')
-    show_RT(tcp2base_rmtxs, tcp2base_tvecs)
-
-    print('show board2cam')
-    show_RT(board2cam_rmtxs, board2cam_tvecs)
-
-    # Refer to the opencv document for more details
-    # https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html#gaebfc1c9f7434196a374c382abf43439b
-    cam2base_rmtx, cam2base_tvec = cv2.calibrateHandEye(base2tcp_rmtxs, base2tcp_tvecs, board2cam_rmtxs, board2cam_tvecs,
-                                                      method=cv2.CALIB_HAND_EYE_TSAI)
-
-    cam2base_rmtx = np.matrix(cam2base_rmtx)
-    cam2base_tvec = np.matrix(cam2base_tvec)
-
-    print('Cam2Base的数据如下(R、T)：')
-    print("Cam2Base R:", cam2base_rmtx)
-    print("Cam2Base T:", cam2base_tvec)
-
-    data=[]
-    for i in range(3):
-        for j in range(3):
-            data.append(round(cam2base_rmtx[i, j],8))
-    for g in range(3):
-            data.append(round(cam2base_tvec[g, 0],8))
-
-    file_path = os.path.join(os.getcwd(), output_path, 'result.txt')
-    with open(file_path, 'w') as file:
-        for item in data:
-            file.write(str(item) + '\n')
-
-    return cam2base_rmtx, cam2base_tvec
-
-
-
 
 def show_RT(rmtxs, tvecs):
     fig = plt.figure()
@@ -199,7 +156,10 @@ def invert_RT_list(rmtx_list, tvec_list):
     for i in range(len(rmtx_list)):
         rmtx = rmtx_list[i]
         tvec = tvec_list[i]
-        rmtx_inv, tvec_inv = InvTransformRT(rmtx, tvec)
+        rvec = get_rvec(rmtx)
+        rvec_inv, tvec_inv = invert_transform(rvec, tvec)
+        rmtx_inv = get_rmtx(rvec_inv)
+        #rmtx_inv, tvec_inv = InvTransformRT(rmtx, tvec)
         rmtx_inv_list.append(rmtx_inv)
         tvec_inv_list.append(tvec_inv)
     return rmtx_inv_list, tvec_inv_list
@@ -220,15 +180,6 @@ def get_rvec(rmtx):
     rvec = np.matrix(rvec)
     check_rvec(rvec)
     return rvec
-
-def InvTransformRT(R, T):
-    check_rmtx(R)
-    check_tvec(T)
-
-    R_inv = R.T
-    T_inv = -R_inv * T
-
-    return R_inv, T_inv
 
 def check_tvec(tvec):
     assert tvec.__class__.__name__ == 'matrix'
@@ -420,7 +371,7 @@ def Get_Camera_Position(cam2tcp_rmtx, cam2tcp_tvec, tcp2base_rmtx, tcp2base_tvec
 
 if __name__ == '__main__':
     #EyeInHand
-    #calib_EyeInHand()
+    calib_EyeInHand()
 
     #EyeToHand
     calib_EyeToHand()
